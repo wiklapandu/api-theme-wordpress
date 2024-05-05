@@ -17,7 +17,8 @@ abstract class WP_Model
     public $meta_data = [];
     public $attributes = [];
     private $post_columns = ['post_author', 'post_date', 'post_date_gmt', 'post_content', 'post_title', 'post_except', 'post_type'];
-    private $user_columns = [];
+    private $user_columns = ['user_login', 'user_pass', 'user_nicename', 'user_email', 'display_name'];
+    private $term_columns = [];
 
     public function __construct(array $attributes = [])
     {
@@ -47,7 +48,9 @@ abstract class WP_Model
             return $this->get_meta(str_replace('meta_', '', $name));
         }
 
-        return $this->attributes[$name];
+        if($name === $this->primaryKey || in_array($name, $this->getColumnsType())) {
+            return $this->attributes[$name];
+        }
     }
 
     public function __set($name, $value)
@@ -62,20 +65,21 @@ abstract class WP_Model
             return;
         }
 
-        $columns = [];
-
-        switch ($this->type) {
-            case 'user':
-                $columns = $this->user_columns;
-                break;
-            case 'post':
-            default:
-                $columns = $this->post_columns;
-                break;
-        }
+        $columns = $this->getColumnsType();
 
         if ($name === $this->primaryKey || in_array($name, $columns)) {
             $this->attributes[$name] = $value;
+        }
+    }
+
+    private function getColumnsType(): array
+    {
+        switch ($this->type) {
+            case 'user':
+                return $this->user_columns;
+            case 'post':
+            default:
+                return $this->post_columns;
         }
     }
 
@@ -83,6 +87,13 @@ abstract class WP_Model
     {
         if(!function_exists('get_field')) return $this->get_meta($name);
 
+        $prefix = $this->getACFPrefix();
+
+        return get_field($name, $prefix.$this->{$this->primaryKey});
+    }
+
+    private function getACFPrefix()
+    {
         $prefix = '';
         switch($this->type) {
             case 'user':
@@ -96,20 +107,19 @@ abstract class WP_Model
                 $prefix = '';
                 break;
         }
-
-        return get_field($name, $prefix.$this->id);
+        return $prefix;
     }
 
     private function get_meta(string $name)
     {
         switch ($this->type) {
             case 'user':
-                return get_user_meta($this->id, $name, true);
+                return get_user_meta($this->{$this->primaryKey}, $name, true);
             case 'term':
-                return get_term_meta($this->id, $name, true);
+                return get_term_meta($this->{$this->primaryKey}, $name, true);
             case 'post':
             default:
-                return get_post_meta($this->id, $name, true);
+                return get_post_meta($this->{$this->primaryKey}, $name, true);
         }
     }
 
@@ -127,47 +137,77 @@ abstract class WP_Model
 
     public function save_acf()
     {
+        $prefix = $this->getACFPrefix();
+        foreach($this->acf_data as $selector => $value) 
+        {
+            update_field($selector, $value, $prefix.$this->{$this->primaryKey});
+        }
+    }
 
+    public function save_meta()
+    {
+        foreach ($this->meta_data as $name => $value) {
+            switch ($this->type) {
+                case 'user':
+                    update_user_meta($this->attributes[$this->primaryKey], $name, $value); 
+                    break;
+                case 'term':
+                    update_term_meta($this->attributes[$this->primaryKey], $name, $value);
+                    break;
+                case 'post':
+                    update_post_meta($this->attributes[$this->primaryKey], $name, $value);
+                    break;
+            }
+        }
     }
 
     public function save()
     {
         switch ($this->type) {
             case 'user':
-                # code...
+                $this->save_user();
                 break;
-            
+            case 'term':
+                $this->save_term();
+                break;
+            case 'post':
+                $this->save_post();
+                break;
             default:
-                # code...
-                break;
+                throw new \Exception('Error in '. static::class . ', type ' . $this->type . ' is invalid it should be one of this (user, term, post).');
         }
     }
 
     protected function save_post()
     {
-        if($this->id) {
-            $this->attributes['ID'] = $this->id;
+        if($this->{$this->primaryKey}) {
             return wp_update_post($this->attributes);
         }
 
-        $this->id = wp_insert_post($this->attributes);
+        $this->{$this->primaryKey} = wp_insert_post($this->attributes);
+        return $this->{$this->primaryKey};
     }
 
     protected function save_user()
     {
-        if($this->id) {
-            // wp_update_user();
+        if($this->{$this->primaryKey}) {
+            return wp_update_user($this->attributes);
         }
 
-        $this->id = wp_insert_user($this->attributes);
-        return $this->id;
+        $this->{$this->primaryKey} = wp_insert_user($this->attributes);
+        return $this->{$this->primaryKey};
     }
 
     protected function save_term()
     {
         $data = $this->attributes;
+        if($this->{$this->primaryKey}) {
+            return wp_update_term($this->attributes[$this->primaryKey], $this->attributes['taxonomy'], $data);
+        }
+
         unset($data['term'], $data['taxonomy']);
         $term_id = wp_insert_term($this->attributes['term'], $this->attributes['taxonomy'], $data);
-        $this->id = $term_id;
+        $this->attributes[$this->primaryKey] = $term_id;
+        return $this->{$this->primaryKey};
     }
 }
