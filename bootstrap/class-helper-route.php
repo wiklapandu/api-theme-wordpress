@@ -21,51 +21,58 @@ class Route
     protected $prefix = '';
     protected $path  = '';
     protected $method = '';
-    protected $methods = ['post', 'get'];
+    protected $methods = ['POST', 'GET'];
     protected $callback;
+    protected $routes = [];
     protected $middlewares = [];
     public function __construct($method = '', $prefix = '', $path = '', $action = null)
     {
-        $this->callback = $action;
-        $this->method = $method;
-        $this->path = $path;
-        $this->prefix = $prefix;
-        $this->callback = $action;
+        if($prefix) {
+            $this->prefix = $prefix;
+        }
+
+        if($method && $path) {
+            $this->registerMethod($method, $path, $action);
+        }
     }
 
     public function registered(): void
     {
         add_action('rest_api_init', function () {
-            register_rest_route('/api/'.$this->prefix, $this->path, [
-                'methods' => $this->method,
-                'callback' => [$this, 'handleCallback'],
-            ]);
-        });
-    }
+            foreach($this->routes as $data) {
+                $prefix = '/api/'.$this->prefix;
+                $prefix = str_replace('//','/', $prefix);
+                register_rest_route($prefix, $data['path'], [
+                    'methods' => $data['method'],
+                    'callback' => function(\WP_REST_Request $request) use($data) {
+                        $callback = $data['callback'];
 
-    public function handleCallback(\WP_REST_Request $request): void
-    {
-        $callback = $this->callback;
+                        $refflection = new ReflectionFunction($data['callback']);
+                        $parameters = $refflection->getParameters();
 
-        $refflection = new ReflectionFunction($this->callback);
-        $parameters = $refflection->getParameters();
-
-        foreach ($parameters as $parameter)
-        {
-            $type = $parameter->getType()->getName();
-            if(get_parent_class($type) === 'WP_REST_Request') {
-                $request = new $type($request->get_method(), $request->get_route(), $request->get_attributes());
+                        foreach ($parameters as $parameter)
+                        {
+                            $type = $parameter->getType()->getName();
+                            if(get_parent_class($type) === 'WP_REST_Request') {
+                                $request = new $type($request->get_method(), $request->get_route(), $request->get_attributes());
+                            }
+                        }
+                        call_user_func($callback, $request);
+                    },
+                ]);
             }
-        }
-        call_user_func($callback, $request);
+        });
     }
 
     protected function registerMethod(string $method, string $path, callable $callback)
     {
-        $this->method = $method;
-        $this->path = $path;
-        $this->callback = $callback;
-        return $this;
+        $this->routes[] = [
+            "method" => $method,
+            "path"   => $path,
+            "callback" => $callback,
+        ];
+
+        return $this->registered();
     }
     
     public function __call($method, $args)
@@ -98,6 +105,13 @@ class Route
         if ($name === 'get') {
             $instance = new self('GET', path: $args[0], action: $args[1]);
             return $instance;
+        }
+    }
+
+    public function group($callback)
+    {
+        if(is_callable($callback)) {
+            call_user_func($callback, $this);
         }
     }
 }

@@ -18,10 +18,19 @@ defined( 'ABSPATH' ) || die( "Can't access directly" );
  *    into custom request inheritance from request
  * 
  * */ 
-Route::get('/testing', function (\MI\Requests\RequestPost $request) {
-    $request->running();
-    return wp_send_json([
-        'status' => 'success',
-        'message'=> 'Running....'
-    ]);
-})->registered();
+// Route::get('/testing', function (\MI\Requests\RequestPost $request) {
+//     $request->running();
+//     return wp_send_json([
+//         'status' => 'success',
+//         'message'=> 'Running....'
+//     ]);
+// })->registered();
+
+Route::prefix('/book')->group(function(Route $route) {
+    $route->get('testing-1', function() {
+
+    });
+    $route->get('testing-2', function() {
+
+    });
+});
