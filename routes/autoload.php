@@ -18,6 +18,7 @@ defined( 'ABSPATH' ) || die( "Can't access directly" );
  *    into custom request inheritance from request
  * 
  * */ 
+
 // Route::get('/testing', function (\MI\Requests\RequestPost $request) {
 //     $request->running();
 //     return wp_send_json([
@@ -28,9 +29,11 @@ defined( 'ABSPATH' ) || die( "Can't access directly" );
 
 Route::prefix('/book')->group(function(Route $route) {
     $route->get('testing-1', function() {
-
+        wp_send_json([
+            'status' => 'success',
+            'message'=> 'welcome father...'
+        ]);
     });
-    $route->get('testing-2', function() {
 
-    });
+    $route->get('testing-2', [\MI\Controllers\NewsController::class, 'index']);
 });

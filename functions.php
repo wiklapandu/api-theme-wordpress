@@ -15,6 +15,7 @@ return new class {
         __DIR__ . '/traits/autoload.php',
         __DIR__ . '/requests/autoload.php',
         __DIR__ . '/bootstrap/app.php',
+        __DIR__ . '/abstracts/autoload.php',
         __DIR__ . '/models/autoload.php',
         __DIR__ . '/**/autoload.php',
     ];

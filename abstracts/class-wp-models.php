@@ -11,31 +11,36 @@ defined( 'ABSPATH' ) || die( "Can't access directly" );
 abstract class WP_Model
 {
     /** @var "user"|"post"|"term"| $type*/ 
-    public $type = '';
-    public $primaryKey = 'ID';
-    public $acf_data = [];
-    public $meta_data = [];
-    public $attributes = [];
-    private $post_columns = ['post_author', 'post_date', 'post_date_gmt', 'post_content', 'post_title', 'post_except', 'post_type'];
+    protected $type = '';
+    protected $identify = '';
+    protected $primaryKey = 'ID';
+    protected $acf_data = [];
+    protected $meta_data = [];
+    protected $attributes = [];
+    private $post_columns = ['post_author', 'post_date', 'post_date_gmt', 'post_content', 'post_title', 'post_excerpt', 'post_type', 'post_status', 'comment_status'];
     private $user_columns = ['user_login', 'user_pass', 'user_nicename', 'user_email', 'display_name'];
     private $term_columns = [];
+    protected \WP_Query $query_post;
 
-    public function __construct(array $attributes = [])
+    public function __construct($attributes = [])
     {
         if(!in_array($this->type, ['user', 'post', 'term'])) trigger_error('Model '. static::class . ' should be one of user, post, term.', E_USER_ERROR);
 
         $columns = $this->getTypeColumn();
         foreach ($attributes as $key => $value)
         {
-            if(!in_array($key, $columns)) {
-                trigger_error(
-                    "variabel {$key} is not exists with type {$this->type}.",
-                    E_USER_ERROR
-                );
+            if(!(in_array($key, $columns) || $key == $this->primaryKey)) {
+                continue;
+                // trigger_error(
+                //     "variabel {$key} is not exists with type {$this->type}.",
+                //     E_USER_ERROR
+                // );
             }
         }
 
         $this->attributes = $attributes;
+
+        $this->query([]);
     }
 
     public function __get($name)
@@ -137,6 +142,8 @@ abstract class WP_Model
 
     public function save_acf()
     {
+        if(!function_exists('update_field')) return $this->save_meta();
+
         $prefix = $this->getACFPrefix();
         foreach($this->acf_data as $selector => $value) 
         {
@@ -209,5 +216,48 @@ abstract class WP_Model
         $term_id = wp_insert_term($this->attributes['term'], $this->attributes['taxonomy'], $data);
         $this->attributes[$this->primaryKey] = $term_id;
         return $this->{$this->primaryKey};
+    }
+
+    public function query(array $args = [])
+    {
+        switch ($this->type) {
+            case 'post':
+                $args['post_type'] = $this->identify;
+                $this->query_post = new \WP_Query($args);
+                break;
+        }
+
+        return $this;
+    }
+
+    public function get()
+    {
+        switch ($this->type) {
+            case 'post':
+                return $this->get_post();
+        }
+    }
+
+    public function first($model = true)
+    {
+        switch ($this->type) {
+            case 'post':
+                return $this->first_post($model);
+            default:
+                # code...
+                break;
+        }
+    }
+
+    protected function get_post($model = true)
+    {
+        $result = $this->query_post->posts;
+        return $result;
+    }
+
+    protected function first_post($model = true)
+    {
+        $result = $this->query_post->post;
+        return $result;
     }
 }

@@ -7,13 +7,14 @@
 namespace MI\Bootstrap;
 
 use ReflectionFunction;
+use ReflectionMethod;
 
 defined( 'ABSPATH' ) || die( "Can't access directly" );
 
 /**
  * @method static Route prefix(string $path)
- * @method static Route post(string $path, callable $callback)
- * @method static Route get(string $path, callable $callback)
+ * @method static Route post(string $path, \Closure $callback)
+ * @method static Route get(string $path, \Closure $callback)
  * 
  * */ 
 class Route
@@ -45,26 +46,49 @@ class Route
                 register_rest_route($prefix, $data['path'], [
                     'methods' => $data['method'],
                     'callback' => function(\WP_REST_Request $request) use($data) {
+                        /**
+                         * @var callable|array
+                         * */ 
                         $callback = $data['callback'];
 
-                        $refflection = new ReflectionFunction($data['callback']);
-                        $parameters = $refflection->getParameters();
+                        if(is_array($callback)) {
+                            $reflection = new ReflectionMethod(...$callback);
+                        } else {
+                            $reflection = new ReflectionFunction($data['callback']);
+                        }
+                        $parameters = $reflection->getParameters();
 
+                        $arguments = [];
                         foreach ($parameters as $parameter)
                         {
                             $type = $parameter->getType()->getName();
                             if(get_parent_class($type) === 'WP_REST_Request') {
-                                $request = new $type($request->get_method(), $request->get_route(), $request->get_attributes());
+                                $arguments[] = new $type($request->get_method(), $request->get_route(), $request->get_attributes());
+                            } else {
+                                $arguments[] = $request;
                             }
                         }
-                        call_user_func($callback, $request);
+
+                        if(is_callable($callback)) {
+                            call_user_func($callback, ...$arguments);
+                        } else {
+                            if ($reflection->isStatic()) {
+                                $result = $reflection->invokeArgs($arguments);
+                            } else {
+                                // If the callback is not static, you need to handle it differently
+                                // You would typically need an object instance to invoke a non-static method
+                                // You can create an instance of the class and then invoke the method
+                                $object = new $callback[0]();
+                                $result = $reflection->invokeArgs($object, $arguments);
+                            }
+                        }
                     },
                 ]);
             }
         });
     }
 
-    protected function registerMethod(string $method, string $path, callable $callback)
+    protected function registerMethod(string $method, string $path, callable|array $callback)
     {
         $this->routes[] = [
             "method" => $method,
