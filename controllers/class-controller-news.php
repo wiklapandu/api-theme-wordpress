@@ -19,6 +19,15 @@ class NewsController extends Controllers {
     }
     public function index()
     {
+        $data = $this->model->limit(1)->get();
+        return wp_send_json([
+            'status'    => 'success',
+            'data'      => $data,
+        ], 200);
+    }
+
+    public function show()
+    {
         $data = $this->model->first(false);
         return wp_send_json([
             'status'    => 'success',

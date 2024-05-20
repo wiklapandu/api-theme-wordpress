@@ -6,34 +6,7 @@
 * @package HelloElementor
 */
 
-use MI\Bootstrap\Route;
 
 defined( 'ABSPATH' ) || die( "Can't access directly" );
 
-
-/**
- * TODO:
- *  - figure it out how to create custom request
- *  - problem still hard to find how to convert request default wordpress
- *    into custom request inheritance from request
- * 
- * */ 
-
-// Route::get('/testing', function (\MI\Requests\RequestPost $request) {
-//     $request->running();
-//     return wp_send_json([
-//         'status' => 'success',
-//         'message'=> 'Running....'
-//     ]);
-// })->registered();
-
-Route::prefix('/book')->group(function(Route $route) {
-    $route->get('testing-1', function() {
-        wp_send_json([
-            'status' => 'success',
-            'message'=> 'welcome father...'
-        ]);
-    });
-
-    $route->get('testing-2', [\MI\Controllers\NewsController::class, 'index']);
-});
+require_once __DIR__ . '/api.php';

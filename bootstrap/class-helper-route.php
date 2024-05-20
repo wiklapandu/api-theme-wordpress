@@ -41,9 +41,14 @@ class Route
     {
         add_action('rest_api_init', function () {
             foreach($this->routes as $data) {
-                $prefix = '/api/'.$this->prefix;
+                $prefix = $this->prefix;
                 $prefix = str_replace('//','/', $prefix);
-                register_rest_route($prefix, $data['path'], [
+                
+                $path = $data['path'];
+                $path = $path != "" ? $path : $prefix;
+                $prefix = $data['path'] != "" ? $prefix : "";
+
+                register_rest_route("api", $prefix."/".$path, [
                     'methods' => $data['method'],
                     'callback' => function(\WP_REST_Request $request) use($data) {
                         /**
@@ -64,6 +69,8 @@ class Route
                             $type = $parameter->getType()->getName();
                             if(get_parent_class($type) === 'WP_REST_Request') {
                                 $arguments[] = new $type($request->get_method(), $request->get_route(), $request->get_attributes());
+                            } elseif(is_callable($type)) {
+                                $arguments[] = new $type;
                             } else {
                                 $arguments[] = $request;
                             }

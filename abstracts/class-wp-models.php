@@ -17,6 +17,8 @@ abstract class WP_Model
     protected $acf_data = [];
     protected $meta_data = [];
     protected $attributes = [];
+    private $per_page     = null;
+    private $args_query         = [];
     private $post_columns = ['post_author', 'post_date', 'post_date_gmt', 'post_content', 'post_title', 'post_excerpt', 'post_type', 'post_status', 'comment_status'];
     private $user_columns = ['user_login', 'user_pass', 'user_nicename', 'user_email', 'display_name'];
     private $term_columns = [];
@@ -39,8 +41,6 @@ abstract class WP_Model
         }
 
         $this->attributes = $attributes;
-
-        $this->query([]);
     }
 
     public function __get($name)
@@ -220,9 +220,15 @@ abstract class WP_Model
 
     public function query(array $args = [])
     {
+        $args = wp_parse_args($args, $this->args_query);
         switch ($this->type) {
             case 'post':
                 $args['post_type'] = $this->identify;
+
+                if(!is_null($this->per_page)) {
+                    $args['posts_per_page'] = $this->per_page;
+                }
+
                 $this->query_post = new \WP_Query($args);
                 break;
         }
@@ -230,8 +236,53 @@ abstract class WP_Model
         return $this;
     }
 
+    public function limit(int $per_page)
+    {
+        $this->per_page = $per_page;
+        return $this;
+    }
+
+    public function where()
+    {
+        return $this;
+    }
+
+    public function orWhere() {}
+
+    public function whereMeta(string $key, mixed $value, $compare = '=') {
+        if(!isset($this->args_query['meta_query']['relation'])) {
+            $this->args_query['meta_query']['relation'] = 'AND';
+        }
+
+        if(!isset($this->args_query['meta_query'][0]['relation'])) {
+            $this->args_query['meta_query'][0]['relation'] = 'AND';
+        }
+
+        $this->args_query['meta_query'][0][] = [
+            'key'       => $key,
+            'compare'   => $compare,
+            'value'     => $value,
+        ];
+        return $this;
+    }
+
+    public function orWhereMeta($key, $value, $compare = '=') {
+        if(!isset($this->args_query['meta_query'][1]['relation'])) {
+            $this->args_query['meta_query'][1]['relation'] = 'OR';
+        }
+
+        $this->args_query['meta_query'][1][] = [
+            'key'       => $key,
+            'compare'   => $compare,
+            'value'     => $value
+        ];
+
+        return $this;
+    }
+
     public function get()
     {
+        $this->query();
         switch ($this->type) {
             case 'post':
                 return $this->get_post();
@@ -240,6 +291,7 @@ abstract class WP_Model
 
     public function first($model = true)
     {
+        $this->query();
         switch ($this->type) {
             case 'post':
                 return $this->first_post($model);
