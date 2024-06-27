@@ -37,6 +37,11 @@ class Route
         }
     }
 
+    public function middleware(array $middlewares = [])
+    {
+        
+    }
+
     public function registered(): void
     {
         add_action('rest_api_init', function () {
@@ -50,7 +55,7 @@ class Route
 
                 register_rest_route("api", $prefix."/".$path, [
                     'methods' => $data['method'],
-                    'callback' => function(\WP_REST_Request $request) use($data) {
+                    'callback' => function(\WP_REST_Request $request) use($data, $path) {
                         /**
                          * @var callable|array
                          * */ 
@@ -67,7 +72,7 @@ class Route
                         foreach ($parameters as $parameter)
                         {
                             $type = $parameter->getType()->getName();
-                            if(get_parent_class($type) === 'WP_REST_Request') {
+                            if(get_parent_class($type) === 'WP_REST_Request' || $type === 'WP_REST_Request') {
                                 $arguments[] = new $type($request->get_method(), $request->get_route(), $request->get_attributes());
                             } elseif(is_callable($type)) {
                                 $arguments[] = new $type;
@@ -80,13 +85,13 @@ class Route
                             call_user_func($callback, ...$arguments);
                         } else {
                             if ($reflection->isStatic()) {
-                                $result = $reflection->invokeArgs($arguments);
+                                $result = $reflection->invoke(...$arguments);
                             } else {
                                 // If the callback is not static, you need to handle it differently
                                 // You would typically need an object instance to invoke a non-static method
                                 // You can create an instance of the class and then invoke the method
                                 $object = new $callback[0]();
-                                $result = $reflection->invokeArgs($object, $arguments);
+                                $result = $reflection->invoke($object, ...$arguments);
                             }
                         }
                     },
